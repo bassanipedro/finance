@@ -8,6 +8,7 @@ const API_URL = 'http://127.0.0.1:8000';
 function App() {
   // Estados para armazenar dados
   const [wallets, setWallets] = useState([]);
+  const [categories, setCategories] = useState([]); // Novo estado para categorias
   const [selectedWallet, setSelectedWallet] = useState(null);
   const [monthlyBills, setMonthlyBills] = useState([]);
 
@@ -17,14 +18,14 @@ function App() {
   const [newBillDescription, setNewBillDescription] = useState('');
   const [newBillValue, setNewBillValue] = useState('');
   const [newBillDueDate, setNewBillDueDate] = useState('');
-  const [newBillCategory, setNewBillCategory] = useState('');
+  const [newBillCategoryId, setNewBillCategoryId] = useState(''); // Alterado de newBillCategory
 
   // Estados para o formulário de conta parcelada
   const [newRecurringBillDescription, setNewRecurringBillDescription] = useState('');
   const [newRecurringBillTotalValue, setNewRecurringBillTotalValue] = useState('');
   const [newRecurringBillInstallments, setNewRecurringBillInstallments] = useState('');
   const [newRecurringBillStartDate, setNewRecurringBillStartDate] = useState('');
-  const [newRecurringBillCategory, setNewRecurringBillCategory] = useState('');
+  const [newRecurringBillCategoryId, setNewRecurringBillCategoryId] = useState(''); // Alterado de newRecurringBillCategory
 
   const [activeForm, setActiveForm] = useState('single'); // 'single' ou 'recurring'
 
@@ -32,6 +33,7 @@ function App() {
   useEffect(() => {
     fetchWallets();
     fetchMonthlyReminders();
+    fetchCategories(); // Busca as categorias
   }, []);
 
   // --- Funções de API ---
@@ -43,6 +45,16 @@ function App() {
       setWallets(response.data);
     } catch (error) {
       console.error("Erro ao buscar carteiras:", error);
+    }
+  };
+
+  // Buscar todas as categorias
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/categories/`);
+      setCategories(response.data);
+    } catch (error) {
+      console.error("Erro ao buscar categorias:", error);
     }
   };
 
@@ -91,7 +103,7 @@ function App() {
   // Criar uma nova conta
   const handleCreateBill = async (e) => {
     e.preventDefault();
-    if (!selectedWallet || !newBillDescription || !newBillValue || !newBillDueDate) {
+    if (!selectedWallet || !newBillDescription || !newBillValue || !newBillDueDate || !newBillCategoryId) {
       alert("Todos os campos da conta são obrigatórios.");
       return;
     }
@@ -101,12 +113,12 @@ function App() {
         value: parseFloat(newBillValue),
         due_date: newBillDueDate,
         wallet_id: selectedWallet.id,
-        category: newBillCategory || null,
+        category_id: parseInt(newBillCategoryId),
       });
       setNewBillDescription('');
       setNewBillValue('');
       setNewBillDueDate('');
-      setNewBillCategory('');
+      setNewBillCategoryId('');
       fetchWalletDetails(selectedWallet.id); // Atualiza os detalhes da carteira selecionada
       fetchMonthlyReminders(); // Atualiza os lembretes
     } catch (error) {
@@ -117,8 +129,8 @@ function App() {
   // Criar uma nova conta parcelada
   const handleCreateRecurringBill = async (e) => {
     e.preventDefault();
-    if (!selectedWallet || !newRecurringBillDescription || !newRecurringBillTotalValue || !newRecurringBillInstallments || !newRecurringBillStartDate) {
-      alert("Todos os campos da conta parcelada são obrigatórios, exceto a categoria.");
+    if (!selectedWallet || !newRecurringBillDescription || !newRecurringBillTotalValue || !newRecurringBillInstallments || !newRecurringBillStartDate || !newRecurringBillCategoryId) {
+      alert("Todos os campos da conta parcelada são obrigatórios.");
       return;
     }
     try {
@@ -128,14 +140,14 @@ function App() {
         installments: parseInt(newRecurringBillInstallments),
         start_date: newRecurringBillStartDate,
         wallet_id: selectedWallet.id,
-        category: newRecurringBillCategory || null,
+        category_id: parseInt(newRecurringBillCategoryId),
       });
       // Limpa o formulário
       setNewRecurringBillDescription('');
       setNewRecurringBillTotalValue('');
       setNewRecurringBillInstallments('');
       setNewRecurringBillStartDate('');
-      setNewRecurringBillCategory('');
+      setNewRecurringBillCategoryId('');
       // Atualiza os dados
       fetchWalletDetails(selectedWallet.id);
       fetchMonthlyReminders();
@@ -197,7 +209,7 @@ function App() {
                   <li key={bill.id} className="bill-item">
                     <span>
                       {bill.description}
-                      {bill.category && <span className="bill-category">{bill.category}</span>}
+                      {bill.category && <span className="bill-category">{bill.category.name}</span>}
                     </span>
                     <span>{bill.value.toFixed(2)}</span>
                     <span>{new Date(bill.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
@@ -247,12 +259,18 @@ function App() {
                     value={newBillDueDate}
                     onChange={(e) => setNewBillDueDate(e.target.value)}
                   />
-                  <input
-                    type="text"
-                    value={newBillCategory}
-                    onChange={(e) => setNewBillCategory(e.target.value)}
-                    placeholder="Categoria (ex: Comida, Lazer)"
-                  />
+                  <select
+                    value={newBillCategoryId}
+                    onChange={(e) => setNewBillCategoryId(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>Selecione a Categoria</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                   <button type="submit">Adicionar Conta</button>
                 </form>
               ) : (
@@ -283,12 +301,18 @@ function App() {
                     onChange={(e) => setNewRecurringBillStartDate(e.target.value)}
                     placeholder="Data da 1ª Parcela"
                   />
-                  <input
-                    type="text"
-                    value={newRecurringBillCategory}
-                    onChange={(e) => setNewRecurringBillCategory(e.target.value)}
-                    placeholder="Categoria (ex: Compras, Eletrônicos)"
-                  />
+                  <select
+                    value={newRecurringBillCategoryId}
+                    onChange={(e) => setNewRecurringBillCategoryId(e.target.value)}
+                    required
+                  >
+                    <option value="" disabled>Selecione a Categoria</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                   <button type="submit">Adicionar Compra Parcelada</button>
                 </form>
               )}
@@ -300,7 +324,7 @@ function App() {
                     <li key={bill.id} className="bill-item">
                       <span>
                         {bill.description}
-                        {bill.category && <span className="bill-category">{bill.category}</span>}
+                        {bill.category && <span className="bill-category">{bill.category.name}</span>}
                       </span>
                       <span>{bill.value.toFixed(2)}</span>
                       <span>{new Date(bill.due_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>

@@ -25,6 +25,15 @@ Base = declarative_base()
 
 # --- Modelos ORM (SQLAlchemy) ---
 
+# Modelo para Categoria
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+
+    bills = relationship("Bill", back_populates="category")
+
 # Modelo para Carteira
 class Wallet(Base):
     __tablename__ = "wallets"
@@ -45,10 +54,12 @@ class Bill(Base):
     value = Column(Float)
     due_date = Column(Date)
     wallet_id = Column(Integer, ForeignKey("wallets.id"))
-    category = Column(String, index=True, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
 
     # Relacionamento com a carteira
     wallet = relationship("Wallet", back_populates="bills")
+    # Relacionamento com a categoria
+    category = relationship("Category", back_populates="bills")
 
 # Cria as tabelas no banco de dados
 Base.metadata.create_all(bind=engine)
@@ -56,12 +67,27 @@ Base.metadata.create_all(bind=engine)
 # --- Schemas (Pydantic) ---
 # Usados para validação de dados da API e serialização
 
+# Schema base para Categoria
+class CategoryBase(BaseModel):
+    name: str
+
+# Schema para criação de Categoria
+class CategoryCreate(CategoryBase):
+    pass
+
+# Schema para leitura de Categoria
+class CategorySchema(CategoryBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 # Schema base para Conta
 class BillBase(BaseModel):
     description: str
     value: float
     due_date: date
-    category: str | None = None
+    category_id: int
 
 # Schema para criação de Conta
 class BillCreate(BillBase):
@@ -71,6 +97,7 @@ class BillCreate(BillBase):
 class BillSchema(BillBase):
     id: int
     wallet_id: int
+    category: CategorySchema
 
     class Config:
         from_attributes = True
@@ -99,7 +126,7 @@ class RecurringBillCreate(BaseModel):
     installments: int
     start_date: date
     wallet_id: int
-    category: str | None = None
+    category_id: int
 
 # --- Dependência do Banco de Dados ---
 # Função para obter uma sessão do banco de dados para cada requisição
@@ -128,6 +155,31 @@ app.add_middleware(
 )
 
 # --- Endpoints da API ---
+
+# === Endpoints para Categorias (Categories) ===
+
+@app.post("/categories/", response_model=CategorySchema, summary="Criar uma nova categoria")
+def create_category(category: CategoryCreate, db: Session = Depends(get_db)):
+    """
+    Cria uma nova categoria para as contas.
+    - **name**: Nome da categoria (deve ser único).
+    """
+    db_category = db.query(Category).filter(Category.name == category.name).first()
+    if db_category:
+        raise HTTPException(status_code=400, detail="Categoria já existe")
+    db_category = Category(name=category.name)
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    return db_category
+
+@app.get("/categories/", response_model=List[CategorySchema], summary="Listar todas as categorias")
+def read_categories(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """
+    Retorna uma lista de todas as categorias cadastradas.
+    """
+    categories = db.query(Category).offset(skip).limit(limit).all()
+    return categories
 
 # === Endpoints para Carteiras (Wallets) ===
 
@@ -173,11 +225,15 @@ def create_recurring_bill(bill_data: RecurringBillCreate, db: Session = Depends(
     - **installments**: Número de parcelas.
     - **start_date**: Data de vencimento da primeira parcela.
     - **wallet_id**: ID da carteira.
-    - **category**: Categoria da conta (opcional).
+    - **category_id**: ID da categoria da conta.
     """
     db_wallet = db.query(Wallet).filter(Wallet.id == bill_data.wallet_id).first()
     if not db_wallet:
         raise HTTPException(status_code=404, detail="Carteira não encontrada")
+
+    db_category = db.query(Category).filter(Category.id == bill_data.category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Categoria não encontrada")
 
     if bill_data.installments <= 0:
         raise HTTPException(status_code=400, detail="O número de parcelas deve ser positivo.")
@@ -194,7 +250,7 @@ def create_recurring_bill(bill_data: RecurringBillCreate, db: Session = Depends(
             value=installment_value,
             due_date=due_date,
             wallet_id=bill_data.wallet_id,
-            category=bill_data.category
+            category_id=bill_data.category_id
         )
         db.add(db_bill)
         created_bills.append(db_bill)
@@ -213,11 +269,16 @@ def create_bill_for_wallet(bill: BillCreate, db: Session = Depends(get_db)):
     - **value**: Valor da conta.
     - **due_date**: Data de vencimento (formato: YYYY-MM-DD).
     - **wallet_id**: ID da carteira à qual a conta pertence.
+    - **category_id**: ID da categoria da conta.
     """
-    # Verifica se a carteira existe
+    # Verifica se a carteira e a categoria existem
     db_wallet = db.query(Wallet).filter(Wallet.id == bill.wallet_id).first()
     if not db_wallet:
         raise HTTPException(status_code=404, detail="Carteira não encontrada")
+    
+    db_category = db.query(Category).filter(Category.id == bill.category_id).first()
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Categoria não encontrada")
     
     db_bill = Bill(**bill.dict())
     db.add(db_bill)
@@ -260,6 +321,25 @@ def get_monthly_reminders(db: Session = Depends(get_db)):
     print(f"Lembrete: {len(monthly_bills)} contas vencem este mês.")
     
     return monthly_bills
+
+# --- Seed de Categorias Iniciais ---
+def seed_initial_categories(db: Session):
+    initial_categories = ["Moradia", "Transporte", "Alimentação", "Saúde", "Educação", "Lazer", "Outros"]
+    for category_name in initial_categories:
+        db_category = db.query(Category).filter(Category.name == category_name).first()
+        if not db_category:
+            db.add(Category(name=category_name))
+    db.commit()
+
+# Evento de inicialização do FastAPI para popular as categorias
+@app.on_event("startup")
+def on_startup():
+    db = SessionLocal()
+    try:
+        seed_initial_categories(db)
+    finally:
+        db.close()
+
 
 # Para executar o servidor, instale as dependências:
 # pip install fastapi uvicorn sqlalchemy python-multipart

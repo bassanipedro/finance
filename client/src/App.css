@@ -40,3 +40,36 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Estilos para o select de categoria (Tema Claro) */
+select {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #ccc; /* Borda mais clara */
+  border-radius: 6px;
+  background-color: #fff; /* Fundo branco */
+  color: #333; /* Texto escuro */
+  font-size: 1rem;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* Seta do select para tema claro */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 1em;
+  cursor: pointer;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+select:focus {
+  outline: none;
+  border-color: #007bff; /* Cor de foco azul padrão */
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+select option {
+  background-color: #fff; /* Fundo branco para as opções */
+  color: #333; /* Texto escuro para as opções */
+}
