@@ -17,14 +17,22 @@ function App() {
   const [newWalletBalance, setNewWalletBalance] = useState('');
   const [newBillDescription, setNewBillDescription] = useState('');
   const [newBillValue, setNewBillValue] = useState('');
-  const [newBillDueDate, setNewBillDueDate] = useState('');
+  
+  // Lógica para obter o dia 10 do próximo mês
+  const getNextMonthDay10 = () => {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 10);
+    return nextMonth.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+  };
+
+  const [newBillDueDate, setNewBillDueDate] = useState(getNextMonthDay10());
   const [newBillCategoryId, setNewBillCategoryId] = useState(''); // Alterado de newBillCategory
 
   // Estados para o formulário de conta parcelada
   const [newRecurringBillDescription, setNewRecurringBillDescription] = useState('');
   const [newRecurringBillTotalValue, setNewRecurringBillTotalValue] = useState('');
   const [newRecurringBillInstallments, setNewRecurringBillInstallments] = useState('');
-  const [newRecurringBillStartDate, setNewRecurringBillStartDate] = useState('');
+  const [newRecurringBillStartDate, setNewRecurringBillStartDate] = useState(getNextMonthDay10());
   const [newRecurringBillCategoryId, setNewRecurringBillCategoryId] = useState(''); // Alterado de newRecurringBillCategory
 
   const [activeForm, setActiveForm] = useState('single'); // 'single' ou 'recurring'
